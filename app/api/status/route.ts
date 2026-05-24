@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     if (model === 'upscale') {
       statusEndpoint = `https://api.magnific.com/v1/ai/image-upscaler/${taskId}`;
     } else if (model === 'text-to-image') {
-      statusEndpoint = `https://api.magnific.com/v1/ai/text-to-image/tasks/${taskId}`;
+      statusEndpoint = `https://api.freepik.com/v1/ai/text-to-image/tasks/${taskId}`;
     }
 
     const response = await fetch(statusEndpoint, {
