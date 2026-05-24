@@ -155,7 +155,7 @@ export default function App() {
     }
   };
 
-  // Trigger Pemrosesan Video (Mendukung Real API & Cloud Uploading)
+  // Trigger Pemrosesan Video (Mendukung Real API & Direct Server Uploading)
   const handleGenerateVideo = async () => {
     if (!isDemoMode && !apiKey.trim()) {
       alert("Masukkan API Key Magnific/Freepik Anda terlebih dahulu!");
@@ -167,8 +167,8 @@ export default function App() {
     }
 
     setVideoState('loading');
-    setVideoProgress(5);
-    setVideoLoadingMsg("Mempersiapkan pengunggahan cloud...");
+    setVideoProgress(15);
+    setVideoLoadingMsg("Mempersiapkan pengiriman aset ke server...");
     setOutputVideoUrl('');
 
     // JIKA DALAM MODE DEMO / SIMULASI
@@ -200,61 +200,23 @@ export default function App() {
       return;
     }
 
-    // JIKA DALAM KONEKSI ASLI (REAL API CALL DENGAN MULTI-CLOUD UPLOAD)
+    // JIKA DALAM KONEKSI ASLI (DIRECT MULTIPART KE VERCEL BACKEND)
     try {
-      // 1. Unggah Gambar Karakter ke tmpfiles.org
-      setVideoProgress(15);
-      setVideoLoadingMsg("Mengunggah Gambar Karakter ke cloud storage (tmpfiles.org)...");
-      const charFormData = new FormData();
-      charFormData.append('file', charImg);
+      setVideoLoadingMsg("Mengirimkan file aset ke server backend Anda...");
+      setVideoProgress(30);
 
-      const charUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
-        method: 'POST',
-        body: charFormData,
-      });
-
-      if (!charUploadRes.ok) throw new Error("Gagal mengunggah Gambar Karakter.");
-      const charUploadData = await charUploadRes.json();
-      const rawCharUrl = charUploadData.data?.url;
-      if (!rawCharUrl) throw new Error("Tidak ada URL yang diterima untuk Gambar Karakter.");
-      
-      // Ubah URL ke tautan unduh langsung agar bisa dibaca AI Magnific
-      const directCharUrl = rawCharUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-
-      // 2. Unggah Video Referensi ke tmpfiles.org
-      setVideoProgress(45);
-      setVideoLoadingMsg("Mengunggah Video Referensi ke cloud storage (tmpfiles.org)...");
-      const motionFormData = new FormData();
-      motionFormData.append('file', motionRef);
-
-      const motionUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
-        method: 'POST',
-        body: motionFormData,
-      });
-
-      if (!motionUploadRes.ok) throw new Error("Gagal mengunggah Video Referensi.");
-      const motionUploadData = await motionUploadRes.json();
-      const rawMotionUrl = motionUploadData.data?.url;
-      if (!rawMotionUrl) throw new Error("Tidak ada URL yang diterima untuk Video Referensi.");
-
-      const directMotionUrl = rawMotionUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
-
-      // 3. Kirim URL Tautan Langsung ke Backend kita dalam format JSON bersih
-      setVideoProgress(75);
-      setVideoLoadingMsg("Menghubungi Vercel serverless backend...");
+      const payload = new FormData();
+      payload.append('image', charImg);
+      payload.append('video_reference', motionRef);
+      payload.append('model', activeVideoModel);
+      if (videoPrompt) payload.append('prompt', videoPrompt);
 
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
           'x-user-api-key': apiKey 
         },
-        body: JSON.stringify({
-          model: activeVideoModel,
-          image_url: directCharUrl,
-          video_url: directMotionUrl,
-          prompt: videoPrompt
-        }),
+        body: payload, // Kirim berkas asli, backend akan mengunggahnya ke tmpfiles secara aman
       });
 
       const result = await response.json();
@@ -320,8 +282,8 @@ export default function App() {
     }
 
     setImageState('loading');
-    setImageProgress(10);
-    setImageLoadingMsg("Menginisialisasi proses...");
+    setImageProgress(15);
+    setImageLoadingMsg("Mengirimkan aset gambar...");
     setOutputImageUrl('');
 
     // JIKA DALAM MODE DEMO
@@ -353,44 +315,26 @@ export default function App() {
 
     // JIKA REAL API CALL
     try {
-      let directSourceImgUrl = '';
+      setImageProgress(30);
+      setImageLoadingMsg("Mentransfer data gambar ke server backend...");
+
+      const payload = new FormData();
+      payload.append('model', imageSuiteMode === 'upscale' ? 'upscale' : 'text-to-image');
+      payload.append('prompt', imagePrompt);
       
       if (imageSuiteMode === 'upscale' && sourceImg) {
-        setImageProgress(35);
-        setImageLoadingMsg("Mengunggah gambar ke cloud storage (tmpfiles.org)...");
-        const sourceFormData = new FormData();
-        sourceFormData.append('file', sourceImg);
-
-        const sourceUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
-          method: 'POST',
-          body: sourceFormData,
-        });
-
-        if (!sourceUploadRes.ok) throw new Error("Gagal mengunggah gambar ke cloud.");
-        const sourceUploadData = await sourceUploadRes.json();
-        const rawSourceUrl = sourceUploadData.data?.url;
-        if (!rawSourceUrl) throw new Error("Gagal mendapatkan URL gambar.");
-
-        directSourceImgUrl = rawSourceUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+        payload.append('image', sourceImg);
+        payload.append('creativity', creativity.toString());
+        payload.append('resemblance', resemblance.toString());
+        payload.append('scale_factor', scaleFactor);
       }
-
-      setImageProgress(75);
-      setImageLoadingMsg("Mengirimkan instruksi pemrosesan ke backend...");
 
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
           'x-user-api-key': apiKey 
         },
-        body: JSON.stringify({
-          model: imageSuiteMode === 'upscale' ? 'upscale' : 'text-to-image',
-          image_url: directSourceImgUrl,
-          prompt: imagePrompt,
-          creativity: creativity,
-          resemblance: resemblance,
-          scale_factor: scaleFactor
-        }),
+        body: payload,
       });
 
       const result = await response.json();
@@ -461,9 +405,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
+    <div className="min-h-screen bg-slate-955 text-slate-100 font-sans flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
       
-      {/* Top Navigation Bar (Bar Navigasi Atas) */}
+      {/* Top Navigation Bar */}
       <header className="border-b border-slate-900 bg-slate-950/70 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
@@ -477,7 +421,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4 w-full md:w-auto justify-end">
-            {/* Mode Indicator (Indikator Mode) */}
+            {/* Mode Indicator */}
             <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[10px] font-bold">
               <button 
                 onClick={() => setIsDemoMode(true)}
@@ -519,10 +463,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Workspace (Area Kerja Utama) */}
+      {/* Main Workspace */}
       <div className="max-w-7xl mx-auto w-full px-6 py-8 flex-grow grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* Navigation Sidebar (Bilah Samping Navigasi) */}
+        {/* Navigation Sidebar */}
         <nav className="lg:col-span-3 flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0">
           <button 
             onClick={() => setActiveTab('video')} 
@@ -573,7 +517,7 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Content Panels (Panel Konten) */}
+        {/* Content Panels */}
         <div className="lg:col-span-9 space-y-8">
           
           {/* TAB 1: AI VIDEO GENERATOR */}
@@ -584,7 +528,7 @@ export default function App() {
                 <p className="text-xs text-slate-400">Pilih model video, upload aset gambar, lalu kontrol gerakannya menggunakan referensi video.</p>
               </div>
 
-              {/* Model Selectors (Pemilih Model) */}
+              {/* Model Selectors */}
               <div className="space-y-3">
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">PILIH MODEL AI UTAMA:</label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -651,7 +595,7 @@ export default function App() {
 
               {/* Workarea Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Left Form (Formulir Kiri) */}
+                {/* Left Form */}
                 <div className="lg:col-span-5 space-y-4 bg-slate-900/20 p-5 rounded-2xl border border-slate-900/80">
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">1. Gambar Target (Karakter Statis)</label>
@@ -870,13 +814,13 @@ export default function App() {
 
                   <button 
                     onClick={handleGenerateImage}
-                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-[11px] tracking-wider uppercase py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-500/10"
+                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-955 font-black text-[11px] tracking-wider uppercase py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-500/10"
                   >
                     {isDemoMode ? "Proses Mode Demo" : "Mulai Generate Asli"}
                   </button>
                 </div>
 
-                {/* Image Output Monitor (Monitor Hasil Gambar) */}
+                {/* Image Output Monitor */}
                 <div className="lg:col-span-7 flex flex-col justify-center items-center bg-slate-955/20 rounded-2xl border border-slate-900 min-h-[400px] p-6 relative">
                   
                   {imageState === 'idle' && (
@@ -951,13 +895,13 @@ export default function App() {
                         placeholder="Mulai dengan fp_..."
                         value={apiKey}
                         onChange={(e) => handleApiKeyChange(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-850 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-cyan-500 transition-all font-mono text-slate-300"
+                        className="w-full bg-slate-950 border border-slate-855 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-cyan-500 transition-all font-mono text-slate-300"
                       />
                     </div>
                     <button 
                       onClick={testApiKeyStatus}
                       disabled={isVerifying}
-                      className="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black text-xs tracking-wider uppercase py-3 rounded-xl transition-all"
+                      className="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-955 font-black text-xs tracking-wider uppercase py-3 rounded-xl transition-all"
                     >
                       {isVerifying ? "Melakukan Ping..." : "Uji Kredensial Sekarang"}
                     </button>
@@ -1005,7 +949,7 @@ export default function App() {
               <div className="space-y-4">
                 {/* route generate */}
                 <div className="bg-slate-900/40 rounded-xl border border-slate-850 overflow-hidden">
-                  <div className="bg-slate-950 px-4 py-2.5 flex justify-between items-center border-b border-slate-900">
+                  <div className="bg-slate-955 px-4 py-2.5 flex justify-between items-center border-b border-slate-900">
                     <span className="text-[10px] font-mono text-cyan-400 font-bold"><i className="fa-solid fa-file-code"></i> app/api/generate/route.ts</span>
                     <button onClick={() => copyToClipboard('code-generate')} className="text-[9px] bg-slate-900 hover:bg-slate-850 px-2 py-0.5 rounded text-slate-400 transition-all font-semibold border border-slate-800">
                       Copy
@@ -1022,8 +966,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'API Key wajib disertakan!' }, { status: 400 });
     }
 
-    const body = await req.json();
-    const model = body.model || 'kling-3-omni';
+    const formData = await req.formData();
+    const model = (formData.get('model') as string) || 'kling-3-omni';
+    const prompt = (formData.get('prompt') as string) || '';
+
+    let directCharUrl = '';
+    let directMotionUrl = '';
+
+    // 1. Unggah Gambar Karakter ke tmpfiles.org dari Server (Bebas CORS!)
+    const imageFile = formData.get('image') as File | null;
+    if (imageFile && imageFile.size > 0) {
+      const charFormData = new FormData();
+      charFormData.append('file', imageFile);
+
+      const charUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
+        method: 'POST',
+        body: charFormData,
+      });
+
+      if (!charUploadRes.ok) {
+        throw new Error(\`Gagal mengunggah Gambar Karakter ke cloud server. Status: \${charUploadRes.status}\`);
+      }
+      const charUploadData = await charUploadRes.json();
+      const rawCharUrl = charUploadData.data?.url;
+      if (!rawCharUrl) {
+        throw new Error("Gagal mengurai respons unggahan Gambar Karakter.");
+      }
+      directCharUrl = rawCharUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    }
+
+    // 2. Unggah Video Referensi ke tmpfiles.org dari Server (Bebas CORS!)
+    const motionFile = formData.get('video_reference') as File | null;
+    if (motionFile && motionFile.size > 0) {
+      const motionFormData = new FormData();
+      motionFormData.append('file', motionFile);
+
+      const motionUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
+        method: 'POST',
+        body: motionFormData,
+      });
+
+      if (!motionUploadRes.ok) {
+        throw new Error(\`Gagal mengunggah Video Referensi ke cloud server. Status: \${motionUploadRes.status}\`);
+      }
+      const motionUploadData = await motionUploadRes.json();
+      const rawMotionUrl = motionUploadData.data?.url;
+      if (!rawMotionUrl) {
+        throw new Error("Gagal mengurai respons unggahan Video Referensi.");
+      }
+      directMotionUrl = rawMotionUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    }
 
     // Tentukan endpoint resmi berdasarkan model yang dipilih
     let apiEndpoint = '';
@@ -1032,25 +1024,25 @@ export async function POST(req: NextRequest) {
     if (model === 'upscale') {
       apiEndpoint = 'https://api.magnific.com/v1/ai/image-upscaler';
       payload = {
-        image: body.image_url,
-        creativity: body.creativity || 4,
-        resemblance: body.resemblance || 7,
-        scale_factor: body.scale_factor + "x",
-        prompt: body.prompt || ''
+        image: directCharUrl,
+        creativity: Number(formData.get('creativity')) || 4,
+        resemblance: Number(formData.get('resemblance')) || 7,
+        scale_factor: (formData.get('scale_factor') || '2') + "x",
+        prompt: prompt
       };
     } else if (model === 'text-to-image') {
       apiEndpoint = 'https://api.magnific.com/v1/ai/text-to-image';
       payload = {
-        prompt: body.prompt,
+        prompt: prompt,
         model: 'mystic'
       };
     } else {
       // Pemrosesan Model Video Reference (Kling 3 Omni standard)
       apiEndpoint = 'https://api.magnific.com/v1/ai/reference-to-video/kling-v3-omni-std';
       payload = {
-        image_url: body.image_url,
-        video_url: body.video_url,
-        prompt: body.prompt || '',
+        image_url: directCharUrl,
+        video_url: directMotionUrl,
+        prompt: prompt,
         duration: 5
       };
     }
@@ -1083,7 +1075,7 @@ export async function POST(req: NextRequest) {
 
                 {/* route status */}
                 <div className="bg-slate-900/40 rounded-xl border border-slate-850 overflow-hidden">
-                  <div className="bg-slate-950 px-4 py-2.5 flex justify-between items-center border-b border-slate-900">
+                  <div className="bg-slate-955 px-4 py-2.5 flex justify-between items-center border-b border-slate-900">
                     <span className="text-[10px] font-mono text-cyan-400 font-bold"><i className="fa-solid fa-file-code"></i> app/api/status/route.ts</span>
                     <button onClick={() => copyToClipboard('code-status')} className="text-[9px] bg-slate-900 hover:bg-slate-850 px-2 py-0.5 rounded text-slate-400 transition-all font-semibold border border-slate-800">
                       Copy
@@ -1109,7 +1101,7 @@ export async function GET(req: NextRequest) {
     if (model === 'upscale') {
       statusEndpoint = \`https://api.magnific.com/v1/ai/image-upscaler/\${taskId}\`;
     } else if (model === 'text-to-image') {
-      statusEndpoint = \`https://api.magnific.com/v1/ai/text-to-image/tasks/\${taskId}\`;
+      statusEndpoint = \`https://api.freepik.com/v1/ai/text-to-image/tasks/\${taskId}\`;
     }
 
     const response = await fetch(statusEndpoint, {
