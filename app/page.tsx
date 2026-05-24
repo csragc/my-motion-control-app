@@ -3,14 +3,14 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
-  // Global States (Status Global)
+  // Status Global
   const [activeTab, setActiveTab] = useState<'video' | 'image' | 'status' | 'code'>('video');
   const [apiKey, setApiKey] = useState('');
   const [apiDotClass, setApiDotClass] = useState('bg-slate-600 border border-slate-800');
   const [apiDotTitle, setApiDotTitle] = useState('API Key tidak terdeteksi');
   const [isDemoMode, setIsDemoMode] = useState(true);
 
-  // Video Generator States (Status Generator Video)
+  // Status Generator Video
   const [activeVideoModel, setActiveVideoModel] = useState('kling-3-omni');
   const [videoPrompt, setVideoPrompt] = useState('');
   const [charImg, setCharImg] = useState<File | null>(null);
@@ -24,7 +24,7 @@ export default function App() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [outputVideoUrl, setOutputVideoUrl] = useState('');
 
-  // Image Suite States (Status Suite Gambar)
+  // Status Suite Gambar (Upscaler & Text-to-Image)
   const [imageSuiteMode, setImageSuiteMode] = useState<'upscale' | 't2i'>('upscale');
   const [imagePrompt, setImagePrompt] = useState('');
   const [creativity, setCreativity] = useState(4);
@@ -39,7 +39,7 @@ export default function App() {
   const [imageProgress, setImageProgress] = useState(0);
   const [outputImageUrl, setOutputImageUrl] = useState('');
 
-  // API Manager States (Status Manajer API)
+  // Status Manajer API
   const [apiConnStatus, setApiConnStatus] = useState('Terputus');
   const [apiConnClass, setApiConnClass] = useState('text-slate-400');
   const [apiAccountType, setApiAccountType] = useState('N/A');
@@ -65,7 +65,11 @@ export default function App() {
     }
 
     return () => {
-      document.head.removeChild(link);
+      try {
+        document.head.removeChild(link);
+      } catch (e) {
+        // Abaikan jika sudah terhapus
+      }
     };
   }, []);
 
@@ -216,7 +220,7 @@ export default function App() {
         headers: { 
           'x-user-api-key': apiKey 
         },
-        body: payload, // Kirim berkas asli, backend akan mengunggahnya ke tmpfiles secara aman
+        body: payload, // Kirim berkas asli, backend akan mengunggahnya secara aman
       });
 
       const result = await response.json();
@@ -415,7 +419,7 @@ export default function App() {
               <i className="fa-solid fa-bolt text-slate-950 text-lg"></i>
             </div>
             <div>
-              <h1 className="text-sm font-black tracking-wider text-white uppercase">MAGNIFIC WORKFLOW</h1>
+              <h1 className="text-sm font-black tracking-wider text-white uppercase">MOTION SUITE</h1>
               <p className="text-[10px] text-slate-500 font-semibold tracking-tight">All-in-One Image & Video Creator Suite</p>
             </div>
           </div>
@@ -425,13 +429,13 @@ export default function App() {
             <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[10px] font-bold">
               <button 
                 onClick={() => setIsDemoMode(true)}
-                className={`px-2.5 py-1 rounded ${isDemoMode ? 'bg-cyan-950/50 text-cyan-400 border border-cyan-800/50' : 'text-slate-500'}`}
+                className={`px-2.5 py-1 rounded ${isDemoMode ? 'bg-cyan-955/50 text-cyan-400 border border-cyan-800/50' : 'text-slate-500'}`}
               >
                 Demo Mode
               </button>
               <button 
                 onClick={() => setIsDemoMode(false)}
-                className={`px-2.5 py-1 rounded ${!isDemoMode ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-800/50' : 'text-slate-500'}`}
+                className={`px-2.5 py-1 rounded ${!isDemoMode ? 'bg-emerald-955/50 text-emerald-400 border border-emerald-800/50' : 'text-slate-500'}`}
               >
                 Live API
               </button>
@@ -711,7 +715,7 @@ export default function App() {
               </div>
 
               {/* Toggle Mode */}
-              <div className="flex bg-slate-900/50 p-1 rounded-lg max-w-xs border border-slate-850">
+              <div className="flex bg-slate-900/50 p-1 rounded-lg max-w-xs border border-slate-855">
                 <button 
                   onClick={() => setImageSuiteMode('upscale')} 
                   className={`flex-1 py-1.5 rounded-md font-bold text-[10px] transition-all ${
@@ -996,7 +1000,7 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (primaryErr) {
-        // Abaikan kegagalan pertama, beralih ke Fallback
+        // Lanjut ke opsi cadangan
       }
 
       // 2. Coba Unggah Cadangan / Fallback (transfer.sh) - Lebih stabil karena biner murni PUT
