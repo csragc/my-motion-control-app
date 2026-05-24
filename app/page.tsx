@@ -447,7 +447,7 @@ export default function App() {
                 placeholder="Tempel API Key Freepik..."
                 value={apiKey}
                 onChange={(e) => handleApiKeyChange(e.target.value)}
-                className="w-full bg-slate-900/50 border border-slate-850 focus:border-cyan-500 rounded-xl pl-8 pr-20 py-1.5 text-[11px] focus:outline-none transition-all text-slate-300 font-mono"
+                className="w-full bg-slate-900/50 border border-slate-855 focus:border-cyan-500 rounded-xl pl-8 pr-20 py-1.5 text-[11px] focus:outline-none transition-all text-slate-300 font-mono"
               />
               <div className="absolute inset-y-1 right-1">
                 <button 
@@ -640,7 +640,7 @@ export default function App() {
                       rows={2} 
                       value={videoPrompt}
                       onChange={(e) => setVideoPrompt(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500 transition-all text-slate-300 resize-none"
+                      className="w-full bg-slate-955 border border-slate-850 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500 transition-all text-slate-300 resize-none"
                     />
                   </div>
 
@@ -973,52 +973,66 @@ export async function POST(req: NextRequest) {
     let directCharUrl = '';
     let directMotionUrl = '';
 
-    // 1. Unggah Gambar Karakter ke tmpfiles.org dari Server (Bebas CORS!)
+    // Helper untuk mengunggah file biner dengan Strategi Dual-Cloud Fallback (tmpfiles.org & transfer.sh)
+    const uploadFileWithFallback = async (file: File, fieldName: string): Promise<string> => {
+      const buffer = Buffer.from(await file.arrayBuffer());
+
+      // 1. Coba Unggah Primer (tmpfiles.org)
+      try {
+        const primaryFormData = new FormData();
+        const blob = new Blob([buffer], { type: file.type });
+        primaryFormData.append('file', blob, file.name);
+
+        const uploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
+          method: 'POST',
+          body: primaryFormData,
+        });
+
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          const rawUrl = uploadData.data?.url;
+          if (rawUrl) {
+            return rawUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+          }
+        }
+      } catch (primaryErr) {
+        // Abaikan kegagalan pertama, beralih ke Fallback
+      }
+
+      // 2. Coba Unggah Cadangan / Fallback (transfer.sh) - Lebih stabil karena biner murni PUT
+      try {
+        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+        const fallbackRes = await fetch(\`https://transfer.sh/\${cleanFileName}\`, {
+          method: 'PUT',
+          body: buffer,
+          headers: {
+            'Content-Type': file.type
+          }
+        });
+
+        if (fallbackRes.ok) {
+          const directUrl = await fallbackRes.text();
+          if (directUrl && directUrl.startsWith('http')) {
+            return directUrl.trim();
+          }
+        }
+      } catch (fallbackErr) {
+        // Abaikan
+      }
+
+      throw new Error(\`Gagal memproses \${fieldName}. Silakan coba berkas lain atau kurangi ukurannya.\`);
+    };
+
+    // 1. Proses Unggah Gambar Karakter
     const imageFile = formData.get('image') as File | null;
     if (imageFile && imageFile.size > 0) {
-      const charFormData = new FormData();
-      const buffer = Buffer.from(await imageFile.arrayBuffer());
-      const blob = new Blob([buffer], { type: imageFile.type });
-      charFormData.append('file', blob, imageFile.name);
-
-      const charUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
-        method: 'POST',
-        body: charFormData,
-      });
-
-      if (!charUploadRes.ok) {
-        throw new Error(\`Gagal mengunggah Gambar Karakter ke cloud server. Status: \${charUploadRes.status}\`);
-      }
-      const charUploadData = await charUploadRes.json();
-      const rawCharUrl = charUploadData.data?.url;
-      if (!rawCharUrl) {
-        throw new Error("Gagal mengurai respons unggahan Gambar Karakter.");
-      }
-      directCharUrl = rawCharUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+      directCharUrl = await uploadFileWithFallback(imageFile, 'Gambar Karakter');
     }
 
-    // 2. Unggah Video Referensi ke tmpfiles.org dari Server (Bebas CORS!)
+    // 2. Proses Unggah Video Referensi
     const motionFile = formData.get('video_reference') as File | null;
     if (motionFile && motionFile.size > 0) {
-      const motionFormData = new FormData();
-      const buffer = Buffer.from(await motionFile.arrayBuffer());
-      const blob = new Blob([buffer], { type: motionFile.type });
-      motionFormData.append('file', blob, motionFile.name);
-
-      const motionUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
-        method: 'POST',
-        body: motionFormData,
-      });
-
-      if (!motionUploadRes.ok) {
-        throw new Error(\`Gagal mengunggah Video Referensi ke cloud server. Status: \${motionUploadRes.status}\`);
-      }
-      const motionUploadData = await motionUploadRes.json();
-      const rawMotionUrl = motionUploadData.data?.url;
-      if (!rawMotionUrl) {
-        throw new Error("Gagal mengurai respons unggahan Video Referensi.");
-      }
-      directMotionUrl = rawMotionUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+      directMotionUrl = await uploadFileWithFallback(motionFile, 'Video Referensi');
     }
 
     // Tentukan endpoint resmi berdasarkan model yang dipilih
