@@ -792,7 +792,7 @@ export default function App() {
                         <select 
                           value={scaleFactor} 
                           onChange={(e) => setScaleFactor(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500"
+                          className="w-full bg-slate-955 border border-slate-850 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500"
                         >
                           <option value="2">2x (Standard HD)</option>
                           <option value="4">4x (Ultra HD 4K)</option>
@@ -960,9 +960,9 @@ export async function POST(req: NextRequest) {
     const model = (formData.get('model') as string) || 'kling-3-omni';
 
     // Tentukan endpoint berdasarkan jenis model
-    let apiEndpoint = 'https://api.freepik.com/v1/ai/video-generator';
+    let apiEndpoint = 'https://api.freepik.com/v1/ai/video';
     if (model === 'upscale') {
-      apiEndpoint = 'https://api.freepik.com/v1/ai/image-upscaler';
+      apiEndpoint = 'https://api.freepik.com/v1/ai/upscale';
     } else if (model === 'text-to-image') {
       apiEndpoint = 'https://api.freepik.com/v1/ai/text-to-image';
     }
@@ -1020,9 +1020,9 @@ export async function GET(req: NextRequest) {
     }
 
     // Tentukan endpoint status berdasarkan jenis model
-    let statusEndpoint = \`https://api.freepik.com/v1/ai/video-generator/tasks/\${taskId}\`;
+    let statusEndpoint = \`https://api.freepik.com/v1/ai/video/tasks/\${taskId}\`;
     if (model === 'upscale') {
-      statusEndpoint = \`https://api.freepik.com/v1/ai/image-upscaler/tasks/\${taskId}\`;
+      statusEndpoint = \`https://api.freepik.com/v1/ai/upscale/tasks/\${taskId}\`;
     } else if (model === 'text-to-image') {
       statusEndpoint = \`https://api.freepik.com/v1/ai/text-to-image/tasks/\${taskId}\`;
     }
