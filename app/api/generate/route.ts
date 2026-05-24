@@ -14,15 +14,13 @@ export async function POST(req: NextRequest) {
     let directCharUrl = '';
     let directMotionUrl = '';
 
-    // Helper untuk mengunggah file biner dengan Strategi Dual-Cloud Fallback (tmpfiles.org & transfer.sh)
     const uploadFileWithFallback = async (file: File, fieldName: string): Promise<string> => {
       const buffer = Buffer.from(await file.arrayBuffer());
 
-      // 1. Coba Unggah Primer (tmpfiles.org)
+      // 1. Opsi Unggahan Utama: tmpfiles.org
       try {
         const primaryFormData = new FormData();
-        const blob = new Blob([buffer], { type: file.type });
-        primaryFormData.append('file', blob, file.name);
+        primaryFormData.append('file', file);
 
         const uploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
           method: 'POST',
@@ -37,17 +35,17 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (primaryErr) {
-        // Lanjut ke opsi cadangan
+        console.warn("tmpfiles.org gagal, mencoba transfer.sh...", primaryErr);
       }
 
-      // 2. Coba Unggah Cadangan / Fallback (transfer.sh) - Lebih stabil karena biner murni PUT
+      // 2. Opsi Cadangan Pertama: transfer.sh (Menggunakan raw binary PUT)
       try {
-        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_') || 'file';
         const fallbackRes = await fetch(`https://transfer.sh/${cleanFileName}`, {
           method: 'PUT',
           body: buffer,
           headers: {
-            'Content-Type': file.type
+            'Content-Type': file.type || 'application/octet-stream'
           }
         });
 
@@ -58,25 +56,44 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (fallbackErr) {
-        // Abaikan
+        console.warn("transfer.sh gagal, mencoba catbox.moe...", fallbackErr);
       }
 
-      throw new Error(`Gagal memproses ${fieldName}. Silakan coba berkas lain atau kurangi ukurannya.`);
+      // 3. Opsi Cadangan Kedua: catbox.moe
+      try {
+        const catboxFormData = new FormData();
+        catboxFormData.append('reqtype', 'fileupload');
+        const blob = new Blob([buffer], { type: file.type });
+        catboxFormData.append('fileToUpload', blob, file.name);
+
+        const catboxRes = await fetch('https://catbox.moe/user/api.php', {
+          method: 'POST',
+          body: catboxFormData,
+        });
+
+        if (catboxRes.ok) {
+          const fileUrl = await catboxRes.text();
+          if (fileUrl && fileUrl.startsWith('http')) {
+            return fileUrl.trim();
+          }
+        }
+      } catch (catboxErr) {
+        console.error("Semua cloud storage cadangan gagal:", catboxErr);
+      }
+
+      throw new Error(`Gagal memproses ${fieldName}. Coba ganti berkas atau kompres ukurannya.`);
     };
 
-    // 1. Proses Unggah Gambar Karakter
     const imageFile = formData.get('image') as File | null;
     if (imageFile && imageFile.size > 0) {
       directCharUrl = await uploadFileWithFallback(imageFile, 'Gambar Karakter');
     }
 
-    // 2. Proses Unggah Video Referensi
     const motionFile = formData.get('video_reference') as File | null;
     if (motionFile && motionFile.size > 0) {
       directMotionUrl = await uploadFileWithFallback(motionFile, 'Video Referensi');
     }
 
-    // Tentukan endpoint resmi berdasarkan model yang dipilih
     let apiEndpoint = '';
     let payload: any = {};
 
@@ -96,7 +113,6 @@ export async function POST(req: NextRequest) {
         model: 'mystic'
       };
     } else {
-      // Pemrosesan Model Video Reference (Kling 3 Omni standard)
       apiEndpoint = 'https://api.magnific.com/v1/ai/reference-to-video/kling-v3-omni-std';
       payload = {
         image_url: directCharUrl,
@@ -106,7 +122,6 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // Mengirim payload JSON bersih ke endpoint Freepik / Magnific
     const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers: {

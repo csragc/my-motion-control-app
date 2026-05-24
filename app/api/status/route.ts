@@ -11,7 +11,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Parameter tidak lengkap.' }, { status: 400 });
     }
 
-    // Tentukan endpoint polling status berdasarkan jenis model
     let statusEndpoint = `https://api.magnific.com/v1/ai/reference-to-video/kling-v3-omni-std/${taskId}`;
     if (model === 'upscale') {
       statusEndpoint = `https://api.magnific.com/v1/ai/image-upscaler/${taskId}`;
