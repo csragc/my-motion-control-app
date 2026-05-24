@@ -10,6 +10,14 @@ export default function App() {
   const [apiDotTitle, setApiDotTitle] = useState('API Key tidak terdeteksi');
   const [isDemoMode, setIsDemoMode] = useState(true);
 
+  // Status Toast Notifikasi Kustom
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   // Status Generator Video
   const [activeVideoModel, setActiveVideoModel] = useState('kling-3-omni');
   const [videoPrompt, setVideoPrompt] = useState('');
@@ -91,7 +99,7 @@ export default function App() {
   // Cek validasi API Key langsung ke sistem simulasi pintar
   const testApiKeyStatus = () => {
     if (!apiKey.trim()) {
-      alert("Masukkan API Key terlebih dahulu!");
+      showToast("Masukkan API Key terlebih dahulu!", "error");
       return;
     }
 
@@ -111,6 +119,7 @@ export default function App() {
         setApiDotClass("bg-emerald-500 shadow-[0_0_15px_rgba(34,197,94,0.4)] border border-emerald-400/30");
         setApiDotTitle("API Terkoneksi (Valid)");
         setIsDemoMode(false);
+        showToast("Verifikasi berhasil!", "success");
       } else {
         setApiVerifAlert("Kunci Tidak Valid. Mohon periksa format kunci.");
         setApiVerifClass("bg-rose-950/20 text-rose-400 border-rose-900/30");
@@ -120,6 +129,7 @@ export default function App() {
         setApiCredits("0 Credits");
         setApiDotClass("bg-slate-600 border border-slate-800");
         setApiDotTitle("API Error (Invalid Key)");
+        showToast("Verifikasi gagal. Periksa format API Key Anda.", "error");
       }
     }, 1200);
   };
@@ -162,11 +172,11 @@ export default function App() {
   // Trigger Pemrosesan Video (Mendukung Real API & Direct Server Uploading)
   const handleGenerateVideo = async () => {
     if (!isDemoMode && !apiKey.trim()) {
-      alert("Masukkan API Key Magnific/Freepik Anda terlebih dahulu!");
+      showToast("Masukkan API Key Magnific/Freepik Anda terlebih dahulu!", "error");
       return;
     }
     if (!charImg || !motionRef) {
-      alert("Mohon unggah Gambar Target dan Video Referensi!");
+      showToast("Mohon unggah Gambar Target dan Video Referensi!", "error");
       return;
     }
 
@@ -199,6 +209,7 @@ export default function App() {
           ];
           setOutputVideoUrl(demoVideos[Math.floor(Math.random() * demoVideos.length)]);
           setVideoState('done');
+          showToast("Simulasi video berhasil diselesaikan!", "success");
         }
       }, 1500);
       return;
@@ -250,6 +261,7 @@ export default function App() {
             setOutputVideoUrl(videoUrl);
             setVideoState('done');
             setVideoProgress(100);
+            showToast("Video berhasil digenerate!", "success");
           } else if (status === 'failed') {
             clearInterval(poll);
             throw new Error('Magnific gagal memproses gerakan aset Anda.');
@@ -259,13 +271,13 @@ export default function App() {
           }
         } catch (pollErr: any) {
           clearInterval(poll);
-          alert(`Gagal memeriksa status: ${pollErr.message}`);
+          showToast(`Gagal memeriksa status: ${pollErr.message}`, "error");
           setVideoState('idle');
         }
       }, 6000);
 
     } catch (err: any) {
-      alert(`Gagal Generate: ${err.message}`);
+      showToast(`Gagal Generate: ${err.message}`, "error");
       setVideoState('idle');
     }
   };
@@ -273,15 +285,15 @@ export default function App() {
   // Trigger Pemrosesan Gambar (Upscale / Text-to-Image)
   const handleGenerateImage = async () => {
     if (!isDemoMode && !apiKey.trim()) {
-      alert("Masukkan API Key Magnific/Freepik Anda terlebih dahulu!");
+      showToast("Masukkan API Key Magnific/Freepik Anda terlebih dahulu!", "error");
       return;
     }
     if (imageSuiteMode === 'upscale' && !sourceImg) {
-      alert("Mohon pilih gambar sumber untuk di-upscale!");
+      showToast("Mohon pilih gambar sumber untuk di-upscale!", "error");
       return;
     }
     if (imageSuiteMode === 't2i' && !imagePrompt.trim()) {
-      alert("Masukkan prompt deskripsi gambar terlebih dahulu!");
+      showToast("Masukkan prompt deskripsi gambar terlebih dahulu!", "error");
       return;
     }
 
@@ -312,6 +324,7 @@ export default function App() {
           ];
           setOutputImageUrl(demoImages[Math.floor(Math.random() * demoImages.length)]);
           setImageState('done');
+          showToast("Simulasi gambar berhasil diproses!", "success");
         }
       }, 1500);
       return;
@@ -367,6 +380,7 @@ export default function App() {
             setOutputImageUrl(imageUrl);
             setImageState('done');
             setImageProgress(100);
+            showToast("Proses modifikasi gambar selesai!", "success");
           } else if (status === 'failed') {
             clearInterval(poll);
             throw new Error('Pemrosesan gambar Magnific gagal.');
@@ -376,13 +390,13 @@ export default function App() {
           }
         } catch (pollErr: any) {
           clearInterval(poll);
-          alert(`Gagal memantau: ${pollErr.message}`);
+          showToast(`Gagal memantau: ${pollErr.message}`, "error");
           setImageState('idle');
         }
       }, 5000);
 
     } catch (err: any) {
-      alert(`Gagal Proses Gambar: ${err.message}`);
+      showToast(`Gagal Proses Gambar: ${err.message}`, "error");
       setImageState('idle');
     }
   };
@@ -397,19 +411,46 @@ export default function App() {
       setOutputImageUrl('');
       setImageProgress(0);
     }
+    showToast("Monitor berhasil dibersihkan.", "info");
   };
 
+  // Memperbaiki Clipboard writeText dengan execCommand Fallback untuk lingkungan iFrame / Sandbox
   const copyToClipboard = (textId: string) => {
     const el = document.getElementById(textId);
     if (el) {
-      navigator.clipboard.writeText(el.innerText).then(() => {
-        alert("Kode backend berhasil disalin!");
-      });
+      const textToCopy = el.innerText;
+      
+      const tempTextArea = document.createElement('textarea');
+      tempTextArea.value = textToCopy;
+      tempTextArea.style.position = 'fixed';
+      tempTextArea.style.top = '0';
+      tempTextArea.style.left = '0';
+      tempTextArea.style.opacity = '0';
+      document.body.appendChild(tempTextArea);
+      
+      tempTextArea.focus();
+      tempTextArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          showToast("Kode backend berhasil disalin!", "success");
+        } else {
+          showToast("Gagal menyalin kode.", "error");
+        }
+      } catch (err) {
+        showToast("Error sistem saat menyalin kode.", "error");
+        console.error("Gagal menyalin otomatis:", err);
+      }
+      
+      document.body.removeChild(tempTextArea);
+    } else {
+      showToast("Elemen kode tidak ditemukan.", "error");
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-955 text-slate-100 font-sans flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
+    <div className="min-h-screen bg-slate-955 text-slate-100 font-sans flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200 relative">
       
       {/* Top Navigation Bar */}
       <header className="border-b border-slate-900 bg-slate-950/70 backdrop-blur-md sticky top-0 z-50">
@@ -428,13 +469,19 @@ export default function App() {
             {/* Mode Indicator */}
             <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[10px] font-bold">
               <button 
-                onClick={() => setIsDemoMode(true)}
+                onClick={() => {
+                  setIsDemoMode(true);
+                  showToast("Mode Demo Aktif", "info");
+                }}
                 className={`px-2.5 py-1 rounded ${isDemoMode ? 'bg-cyan-955/50 text-cyan-400 border border-cyan-800/50' : 'text-slate-500'}`}
               >
                 Demo Mode
               </button>
               <button 
-                onClick={() => setIsDemoMode(false)}
+                onClick={() => {
+                  setIsDemoMode(false);
+                  showToast("Mode Live API Aktif", "info");
+                }}
                 className={`px-2.5 py-1 rounded ${!isDemoMode ? 'bg-emerald-955/50 text-emerald-400 border border-emerald-800/50' : 'text-slate-500'}`}
               >
                 Live API
@@ -476,7 +523,7 @@ export default function App() {
             onClick={() => setActiveTab('video')} 
             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs tracking-wide text-left transition-all w-full min-w-[160px] ${
               activeTab === 'video' 
-                ? 'bg-cyan-950/20 border border-cyan-900/30 text-cyan-400' 
+                ? 'bg-cyan-955/20 border border-cyan-900/30 text-cyan-400' 
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
             }`}
           >
@@ -488,7 +535,7 @@ export default function App() {
             onClick={() => setActiveTab('image')} 
             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs tracking-wide text-left transition-all w-full min-w-[160px] ${
               activeTab === 'image' 
-                ? 'bg-cyan-950/20 border border-cyan-900/30 text-cyan-400' 
+                ? 'bg-cyan-955/20 border border-cyan-900/30 text-cyan-400' 
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
             }`}
           >
@@ -500,7 +547,7 @@ export default function App() {
             onClick={() => setActiveTab('status')} 
             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs tracking-wide text-left transition-all w-full min-w-[160px] ${
               activeTab === 'status' 
-                ? 'bg-cyan-950/20 border border-cyan-900/30 text-cyan-400' 
+                ? 'bg-cyan-955/20 border border-cyan-900/30 text-cyan-400' 
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
             }`}
           >
@@ -512,7 +559,7 @@ export default function App() {
             onClick={() => setActiveTab('code')} 
             className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs tracking-wide text-left transition-all w-full min-w-[160px] ${
               activeTab === 'code' 
-                ? 'bg-cyan-950/20 border border-cyan-900/30 text-cyan-400' 
+                ? 'bg-cyan-955/20 border border-cyan-900/30 text-cyan-400' 
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
             }`}
           >
@@ -541,7 +588,7 @@ export default function App() {
                     onClick={() => setActiveVideoModel('kling-3-omni')} 
                     className={`p-4 rounded-xl cursor-pointer transition-all relative overflow-hidden border ${
                       activeVideoModel === 'kling-3-omni' 
-                        ? 'border-cyan-500/40 bg-cyan-950/10' 
+                        ? 'border-cyan-500/40 bg-cyan-955/10' 
                         : 'border-slate-850 bg-slate-900/20 hover:border-slate-800'
                     }`}
                   >
@@ -560,7 +607,7 @@ export default function App() {
                     onClick={() => setActiveVideoModel('runway-gen4.5')} 
                     className={`p-4 rounded-xl cursor-pointer transition-all relative overflow-hidden border ${
                       activeVideoModel === 'runway-gen4.5' 
-                        ? 'border-cyan-500/40 bg-cyan-950/10' 
+                        ? 'border-cyan-500/40 bg-cyan-955/10' 
                         : 'border-slate-850 bg-slate-900/20 hover:border-slate-800'
                     }`}
                   >
@@ -579,7 +626,7 @@ export default function App() {
                     onClick={() => setActiveVideoModel('wan-2.6')} 
                     className={`p-4 rounded-xl cursor-pointer transition-all relative overflow-hidden border ${
                       activeVideoModel === 'wan-2.6' 
-                        ? 'border-cyan-500/40 bg-cyan-950/10' 
+                        ? 'border-cyan-500/40 bg-cyan-955/10' 
                         : 'border-slate-850 bg-slate-900/20 hover:border-slate-800'
                     }`}
                   >
@@ -644,13 +691,13 @@ export default function App() {
                       rows={2} 
                       value={videoPrompt}
                       onChange={(e) => setVideoPrompt(e.target.value)}
-                      className="w-full bg-slate-955 border border-slate-850 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500 transition-all text-slate-300 resize-none"
+                      className="w-full bg-slate-955 border border-slate-855 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500 transition-all text-slate-300 resize-none"
                     />
                   </div>
 
                   <button 
                     onClick={handleGenerateVideo}
-                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black text-[11px] tracking-wider uppercase py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-500/10"
+                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-955 font-black text-[11px] tracking-wider uppercase py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-500/10"
                   >
                     {isDemoMode ? "Mulai Simulasi Gerak (Demo)" : "Generate Video (Asli)"}
                   </button>
@@ -661,7 +708,7 @@ export default function App() {
                   
                   {videoState === 'idle' && (
                     <div className="text-center space-y-3">
-                      <div className="w-12 h-12 bg-slate-900/60 rounded-full flex items-center justify-center mx-auto text-slate-500 border border-slate-850">
+                      <div className="w-12 h-12 bg-slate-900/60 rounded-full flex items-center justify-center mx-auto text-slate-500 border border-slate-855">
                         <i className="fa-solid fa-clapperboard text-lg"></i>
                       </div>
                       <h4 className="font-bold text-slate-400 text-xs">Monitor Output Video</h4>
@@ -818,7 +865,7 @@ export default function App() {
 
                   <button 
                     onClick={handleGenerateImage}
-                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-955 font-black text-[11px] tracking-wider uppercase py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-500/10"
+                    className="w-full bg-gradient-to-r from-cyan-500 Seco to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-955 font-black text-[11px] tracking-wider uppercase py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-500/10"
                   >
                     {isDemoMode ? "Proses Mode Demo" : "Mulai Generate Asli"}
                   </button>
@@ -855,7 +902,7 @@ export default function App() {
 
                   {imageState === 'done' && (
                     <div className="w-full space-y-4">
-                      <div className="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-900 aspect-[4/3] flex items-center justify-center">
+                      <div className="relative rounded-xl overflow-hidden bg-slate-955 border border-slate-900 aspect-[4/3] flex items-center justify-center">
                         <img src={outputImageUrl} className="w-full h-full object-contain max-h-[340px]" alt="Output Preview" />
                       </div>
                       <div className="flex gap-2">
@@ -883,7 +930,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-slate-900/20 p-6 rounded-2xl border border-slate-850 space-y-4">
+                <div className="bg-slate-900/20 p-6 rounded-2xl border border-slate-855 space-y-4">
                   <h3 className="font-extrabold text-sm text-slate-200 flex items-center gap-2">
                     <i className="fa-solid fa-shield-halved text-cyan-400"></i> Integrasi API Key Aman
                   </h3>
@@ -927,7 +974,7 @@ export default function App() {
                         <p className="text-[9px] text-slate-500 uppercase font-bold">Golongan Lisensi</p>
                         <p className="text-xs font-black text-cyan-400 mt-1">{apiAccountType}</p>
                       </div>
-                      <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-900 text-center col-span-2">
+                      <div className="bg-slate-955/60 p-3 rounded-xl border border-slate-900 text-center col-span-2">
                         <p className="text-[9px] text-slate-500 uppercase font-bold">Kredit Terbuka</p>
                         <p className="text-base font-black text-slate-100 mt-1">{apiCredits}</p>
                       </div>
@@ -1096,10 +1143,10 @@ export async function POST(req: NextRequest) {
                 </div>
 
                 {/* route status */}
-                <div className="bg-slate-900/40 rounded-xl border border-slate-850 overflow-hidden">
+                <div className="bg-slate-900/40 rounded-xl border border-slate-855 overflow-hidden">
                   <div className="bg-slate-955 px-4 py-2.5 flex justify-between items-center border-b border-slate-900">
                     <span className="text-[10px] font-mono text-cyan-400 font-bold"><i className="fa-solid fa-file-code"></i> app/api/status/route.ts</span>
-                    <button onClick={() => copyToClipboard('code-status')} className="text-[9px] bg-slate-900 hover:bg-slate-850 px-2 py-0.5 rounded text-slate-400 transition-all font-semibold border border-slate-800">
+                    <button onClick={() => copyToClipboard('code-status')} className="text-[9px] bg-slate-900 hover:bg-slate-855 px-2 py-0.5 rounded text-slate-400 transition-all font-semibold border border-slate-800">
                       Copy
                     </button>
                   </div>
@@ -1154,6 +1201,22 @@ export async function GET(req: NextRequest) {
 
         </div>
       </div>
+
+      {/* Global Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 z-[9999] p-4 rounded-xl shadow-2xl border flex items-center gap-3 transition-all duration-300 animate-bounce ${
+          toast.type === 'success' ? 'bg-emerald-950/90 text-emerald-400 border-emerald-500/30' :
+          toast.type === 'error' ? 'bg-rose-950/90 text-rose-400 border-rose-500/30' :
+          'bg-slate-900/90 text-slate-100 border-slate-800'
+        }`}>
+          <i className={`fa-solid ${
+            toast.type === 'success' ? 'fa-circle-check' :
+            toast.type === 'error' ? 'fa-circle-exclamation' :
+            'fa-circle-info'
+          }`}></i>
+          <span className="text-xs font-bold">{toast.message}</span>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-900/60 py-6 text-center bg-slate-950/40 mt-auto text-[11px] text-slate-500">
