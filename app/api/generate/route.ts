@@ -7,8 +7,60 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'API Key wajib disertakan!' }, { status: 400 });
     }
 
-    const body = await req.json();
-    const model = body.model || 'kling-3-omni';
+    const formData = await req.formData();
+    const model = (formData.get('model') as string) || 'kling-3-omni';
+    const prompt = (formData.get('prompt') as string) || '';
+
+    let directCharUrl = '';
+    let directMotionUrl = '';
+
+    // 1. Unggah Gambar Karakter ke tmpfiles.org dari Server (Bebas CORS!)
+    const imageFile = formData.get('image') as File | null;
+    if (imageFile && imageFile.size > 0) {
+      const charFormData = new FormData();
+      const buffer = Buffer.from(await imageFile.arrayBuffer());
+      const blob = new Blob([buffer], { type: imageFile.type });
+      charFormData.append('file', blob, imageFile.name);
+
+      const charUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
+        method: 'POST',
+        body: charFormData,
+      });
+
+      if (!charUploadRes.ok) {
+        throw new Error(`Gagal mengunggah Gambar Karakter ke cloud server. Status: ${charUploadRes.status}`);
+      }
+      const charUploadData = await charUploadRes.json();
+      const rawCharUrl = charUploadData.data?.url;
+      if (!rawCharUrl) {
+        throw new Error("Gagal mengurai respons unggahan Gambar Karakter.");
+      }
+      directCharUrl = rawCharUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    }
+
+    // 2. Unggah Video Referensi ke tmpfiles.org dari Server (Bebas CORS!)
+    const motionFile = formData.get('video_reference') as File | null;
+    if (motionFile && motionFile.size > 0) {
+      const motionFormData = new FormData();
+      const buffer = Buffer.from(await motionFile.arrayBuffer());
+      const blob = new Blob([buffer], { type: motionFile.type });
+      motionFormData.append('file', blob, motionFile.name);
+
+      const motionUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
+        method: 'POST',
+        body: motionFormData,
+      });
+
+      if (!motionUploadRes.ok) {
+        throw new Error(`Gagal mengunggah Video Referensi ke cloud server. Status: ${motionUploadRes.status}`);
+      }
+      const motionUploadData = await motionUploadRes.json();
+      const rawMotionUrl = motionUploadData.data?.url;
+      if (!rawMotionUrl) {
+        throw new Error("Gagal mengurai respons unggahan Video Referensi.");
+      }
+      directMotionUrl = rawMotionUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    }
 
     // Tentukan endpoint resmi berdasarkan model yang dipilih
     let apiEndpoint = '';
@@ -17,25 +69,25 @@ export async function POST(req: NextRequest) {
     if (model === 'upscale') {
       apiEndpoint = 'https://api.magnific.com/v1/ai/image-upscaler';
       payload = {
-        image: body.image_url,
-        creativity: body.creativity || 4,
-        resemblance: body.resemblance || 7,
-        scale_factor: body.scale_factor + "x",
-        prompt: body.prompt || ''
+        image: directCharUrl,
+        creativity: Number(formData.get('creativity')) || 4,
+        resemblance: Number(formData.get('resemblance')) || 7,
+        scale_factor: (formData.get('scale_factor') || '2') + "x",
+        prompt: prompt
       };
     } else if (model === 'text-to-image') {
       apiEndpoint = 'https://api.magnific.com/v1/ai/text-to-image';
       payload = {
-        prompt: body.prompt,
+        prompt: prompt,
         model: 'mystic'
       };
     } else {
       // Pemrosesan Model Video Reference (Kling 3 Omni standard)
       apiEndpoint = 'https://api.magnific.com/v1/ai/reference-to-video/kling-v3-omni-std';
       payload = {
-        image_url: body.image_url,
-        video_url: body.video_url,
-        prompt: body.prompt || '',
+        image_url: directCharUrl,
+        video_url: directMotionUrl,
+        prompt: prompt,
         duration: 5
       };
     }
