@@ -3,14 +3,14 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
-  // Global States
+  // Global States (Status Global)
   const [activeTab, setActiveTab] = useState<'video' | 'image' | 'status' | 'code'>('video');
   const [apiKey, setApiKey] = useState('');
   const [apiDotClass, setApiDotClass] = useState('bg-slate-600 border border-slate-800');
   const [apiDotTitle, setApiDotTitle] = useState('API Key tidak terdeteksi');
   const [isDemoMode, setIsDemoMode] = useState(true);
 
-  // Video Generator States
+  // Video Generator States (Status Generator Video)
   const [activeVideoModel, setActiveVideoModel] = useState('kling-3-omni');
   const [videoPrompt, setVideoPrompt] = useState('');
   const [charImg, setCharImg] = useState<File | null>(null);
@@ -24,7 +24,7 @@ export default function App() {
   const [videoProgress, setVideoProgress] = useState(0);
   const [outputVideoUrl, setOutputVideoUrl] = useState('');
 
-  // Image Suite States
+  // Image Suite States (Status Suite Gambar)
   const [imageSuiteMode, setImageSuiteMode] = useState<'upscale' | 't2i'>('upscale');
   const [imagePrompt, setImagePrompt] = useState('');
   const [creativity, setCreativity] = useState(4);
@@ -39,7 +39,7 @@ export default function App() {
   const [imageProgress, setImageProgress] = useState(0);
   const [outputImageUrl, setOutputImageUrl] = useState('');
 
-  // API Manager States
+  // API Manager States (Status Manajer API)
   const [apiConnStatus, setApiConnStatus] = useState('Terputus');
   const [apiConnClass, setApiConnClass] = useState('text-slate-400');
   const [apiAccountType, setApiAccountType] = useState('N/A');
@@ -48,14 +48,14 @@ export default function App() {
   const [apiVerifClass, setApiVerifClass] = useState('bg-slate-950/40 text-slate-400 border-slate-900');
   const [isVerifying, setIsVerifying] = useState(false);
 
-  // Load FontAwesome secara dinamis agar ikon menyala
+  // Memuat FontAwesome secara dinamis agar ikon antarmuka menyala
   useEffect(() => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css';
     document.head.appendChild(link);
 
-    // Ambil API Key dari penyimpanan lokal browser jika ada
+    // Ambil API Key dari penyimpanan lokal browser (Local Storage) jika ada
     const savedKey = localStorage.getItem('user_magnific_key');
     if (savedKey) {
       setApiKey(savedKey);
@@ -69,7 +69,7 @@ export default function App() {
     };
   }, []);
 
-  // Simpan API Key saat diketik
+  // Menyimpan API Key saat diketik oleh pengguna
   const handleApiKeyChange = (value: string) => {
     setApiKey(value);
     localStorage.setItem('user_magnific_key', value);
@@ -155,7 +155,7 @@ export default function App() {
     }
   };
 
-  // Trigger Pemrosesan Video (Mendukung Real API & Simulasi Cerdas)
+  // Trigger Pemrosesan Video (Mendukung Real API & Cloud Uploading)
   const handleGenerateVideo = async () => {
     if (!isDemoMode && !apiKey.trim()) {
       alert("Masukkan API Key Magnific/Freepik Anda terlebih dahulu!");
@@ -167,8 +167,8 @@ export default function App() {
     }
 
     setVideoState('loading');
-    setVideoProgress(10);
-    setVideoLoadingMsg("Mengunggah aset gerakan ke Vercel...");
+    setVideoProgress(5);
+    setVideoLoadingMsg("Mempersiapkan pengunggahan cloud...");
     setOutputVideoUrl('');
 
     // JIKA DALAM MODE DEMO / SIMULASI
@@ -200,18 +200,61 @@ export default function App() {
       return;
     }
 
-    // JIKA DALAM KONEKSI ASLI (REAL API CALL KE NEXT.JS BACKEND)
+    // JIKA DALAM KONEKSI ASLI (REAL API CALL DENGAN MULTI-CLOUD UPLOAD)
     try {
-      const payload = new FormData();
-      payload.append('image', charImg);
-      payload.append('video_reference', motionRef);
-      payload.append('model', activeVideoModel);
-      if (videoPrompt) payload.append('prompt', videoPrompt);
+      // 1. Unggah Gambar Karakter ke tmpfiles.org
+      setVideoProgress(15);
+      setVideoLoadingMsg("Mengunggah Gambar Karakter ke cloud storage (tmpfiles.org)...");
+      const charFormData = new FormData();
+      charFormData.append('file', charImg);
+
+      const charUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
+        method: 'POST',
+        body: charFormData,
+      });
+
+      if (!charUploadRes.ok) throw new Error("Gagal mengunggah Gambar Karakter.");
+      const charUploadData = await charUploadRes.json();
+      const rawCharUrl = charUploadData.data?.url;
+      if (!rawCharUrl) throw new Error("Tidak ada URL yang diterima untuk Gambar Karakter.");
+      
+      // Ubah URL ke tautan unduh langsung agar bisa dibaca AI Magnific
+      const directCharUrl = rawCharUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+
+      // 2. Unggah Video Referensi ke tmpfiles.org
+      setVideoProgress(45);
+      setVideoLoadingMsg("Mengunggah Video Referensi ke cloud storage (tmpfiles.org)...");
+      const motionFormData = new FormData();
+      motionFormData.append('file', motionRef);
+
+      const motionUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
+        method: 'POST',
+        body: motionFormData,
+      });
+
+      if (!motionUploadRes.ok) throw new Error("Gagal mengunggah Video Referensi.");
+      const motionUploadData = await motionUploadRes.json();
+      const rawMotionUrl = motionUploadData.data?.url;
+      if (!rawMotionUrl) throw new Error("Tidak ada URL yang diterima untuk Video Referensi.");
+
+      const directMotionUrl = rawMotionUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+
+      // 3. Kirim URL Tautan Langsung ke Backend kita dalam format JSON bersih
+      setVideoProgress(75);
+      setVideoLoadingMsg("Menghubungi Vercel serverless backend...");
 
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'x-user-api-key': apiKey },
-        body: payload,
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-api-key': apiKey 
+        },
+        body: JSON.stringify({
+          model: activeVideoModel,
+          image_url: directCharUrl,
+          video_url: directMotionUrl,
+          prompt: videoPrompt
+        }),
       });
 
       const result = await response.json();
@@ -221,7 +264,7 @@ export default function App() {
       if (!taskId) throw new Error('Gagal mendapatkan ID tugas dari Magnific.');
 
       setVideoTaskId(taskId);
-      setVideoProgress(30);
+      setVideoProgress(85);
       setVideoLoadingMsg("Aset diterima! Antrean Magnific dimulai...");
 
       // Memulai Polling Status ke server Vercel Anda setiap 6 detik
@@ -277,8 +320,8 @@ export default function App() {
     }
 
     setImageState('loading');
-    setImageProgress(15);
-    setImageLoadingMsg("Mengunggah aset gambar...");
+    setImageProgress(10);
+    setImageLoadingMsg("Menginisialisasi proses...");
     setOutputImageUrl('');
 
     // JIKA DALAM MODE DEMO
@@ -310,21 +353,44 @@ export default function App() {
 
     // JIKA REAL API CALL
     try {
-      const payload = new FormData();
-      payload.append('model', imageSuiteMode);
-      payload.append('prompt', imagePrompt);
-
+      let directSourceImgUrl = '';
+      
       if (imageSuiteMode === 'upscale' && sourceImg) {
-        payload.append('image', sourceImg);
-        payload.append('creativity', creativity.toString());
-        payload.append('resemblance', resemblance.toString());
-        payload.append('scale_factor', scaleFactor);
+        setImageProgress(35);
+        setImageLoadingMsg("Mengunggah gambar ke cloud storage (tmpfiles.org)...");
+        const sourceFormData = new FormData();
+        sourceFormData.append('file', sourceImg);
+
+        const sourceUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
+          method: 'POST',
+          body: sourceFormData,
+        });
+
+        if (!sourceUploadRes.ok) throw new Error("Gagal mengunggah gambar ke cloud.");
+        const sourceUploadData = await sourceUploadRes.json();
+        const rawSourceUrl = sourceUploadData.data?.url;
+        if (!rawSourceUrl) throw new Error("Gagal mendapatkan URL gambar.");
+
+        directSourceImgUrl = rawSourceUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
       }
+
+      setImageProgress(75);
+      setImageLoadingMsg("Mengirimkan instruksi pemrosesan ke backend...");
 
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'x-user-api-key': apiKey },
-        body: payload,
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-api-key': apiKey 
+        },
+        body: JSON.stringify({
+          model: imageSuiteMode === 'upscale' ? 'upscale' : 'text-to-image',
+          image_url: directSourceImgUrl,
+          prompt: imagePrompt,
+          creativity: creativity,
+          resemblance: resemblance,
+          scale_factor: scaleFactor
+        }),
       });
 
       const result = await response.json();
@@ -334,7 +400,7 @@ export default function App() {
       if (!taskId) throw new Error('Tidak menerima ID Tugas dari Magnific.');
 
       setImageTaskId(taskId);
-      setImageProgress(40);
+      setImageProgress(85);
       setImageLoadingMsg("Menghitung matriks piksel di server...");
 
       const poll = setInterval(async () => {
@@ -397,7 +463,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col selection:bg-cyan-500/30 selection:text-cyan-200">
       
-      {/* Top Navigation Bar */}
+      {/* Top Navigation Bar (Bar Navigasi Atas) */}
       <header className="border-b border-slate-900 bg-slate-950/70 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
@@ -411,7 +477,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-4 w-full md:w-auto justify-end">
-            {/* Mode Indicator */}
+            {/* Mode Indicator (Indikator Mode) */}
             <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-[10px] font-bold">
               <button 
                 onClick={() => setIsDemoMode(true)}
@@ -453,10 +519,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Workspace */}
+      {/* Main Workspace (Area Kerja Utama) */}
       <div className="max-w-7xl mx-auto w-full px-6 py-8 flex-grow grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* Navigation Sidebar */}
+        {/* Navigation Sidebar (Bilah Samping Navigasi) */}
         <nav className="lg:col-span-3 flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0">
           <button 
             onClick={() => setActiveTab('video')} 
@@ -507,7 +573,7 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Content Panels */}
+        {/* Content Panels (Panel Konten) */}
         <div className="lg:col-span-9 space-y-8">
           
           {/* TAB 1: AI VIDEO GENERATOR */}
@@ -518,7 +584,7 @@ export default function App() {
                 <p className="text-xs text-slate-400">Pilih model video, upload aset gambar, lalu kontrol gerakannya menggunakan referensi video.</p>
               </div>
 
-              {/* Model Selectors */}
+              {/* Model Selectors (Pemilih Model) */}
               <div className="space-y-3">
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">PILIH MODEL AI UTAMA:</label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -585,7 +651,7 @@ export default function App() {
 
               {/* Workarea Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Left Form */}
+                {/* Left Form (Formulir Kiri) */}
                 <div className="lg:col-span-5 space-y-4 bg-slate-900/20 p-5 rounded-2xl border border-slate-900/80">
                   <div>
                     <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">1. Gambar Target (Karakter Statis)</label>
@@ -643,7 +709,7 @@ export default function App() {
                 </div>
 
                 {/* Monitor Output */}
-                <div className="lg:col-span-7 flex flex-col justify-center items-center bg-slate-950/20 rounded-2xl border border-slate-900 min-h-[400px] p-6 relative">
+                <div className="lg:col-span-7 flex flex-col justify-center items-center bg-slate-955/20 rounded-2xl border border-slate-900 min-h-[400px] p-6 relative">
                   
                   {videoState === 'idle' && (
                     <div className="text-center space-y-3">
@@ -771,7 +837,7 @@ export default function App() {
                         <input 
                           type="range" min="0" max="10" value={creativity} 
                           onChange={(e) => setCreativity(Number(e.target.value))}
-                          className="w-full accent-cyan-500 bg-slate-950 h-1.5 rounded-lg" 
+                          className="w-full accent-cyan-500 bg-slate-955 h-1.5 rounded-lg" 
                         />
                       </div>
 
@@ -783,7 +849,7 @@ export default function App() {
                         <input 
                           type="range" min="1" max="10" value={resemblance} 
                           onChange={(e) => setResemblance(Number(e.target.value))}
-                          className="w-full accent-cyan-500 bg-slate-950 h-1.5 rounded-lg" 
+                          className="w-full accent-cyan-500 bg-slate-955 h-1.5 rounded-lg" 
                         />
                       </div>
 
@@ -792,7 +858,7 @@ export default function App() {
                         <select 
                           value={scaleFactor} 
                           onChange={(e) => setScaleFactor(e.target.value)}
-                          className="w-full bg-slate-955 border border-slate-850 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500"
+                          className="w-full bg-slate-955 border border-slate-855 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500"
                         >
                           <option value="2">2x (Standard HD)</option>
                           <option value="4">4x (Ultra HD 4K)</option>
@@ -810,8 +876,8 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Image Output Monitor */}
-                <div className="lg:col-span-7 flex flex-col justify-center items-center bg-slate-950/20 rounded-2xl border border-slate-900 min-h-[400px] p-6 relative">
+                {/* Image Output Monitor (Monitor Hasil Gambar) */}
+                <div className="lg:col-span-7 flex flex-col justify-center items-center bg-slate-955/20 rounded-2xl border border-slate-900 min-h-[400px] p-6 relative">
                   
                   {imageState === 'idle' && (
                     <div className="text-center space-y-3">
@@ -945,7 +1011,7 @@ export default function App() {
                       Copy
                     </button>
                   </div>
-                  <pre className="p-4 text-[10px] font-mono text-slate-300 overflow-x-auto max-h-[220px] bg-slate-950/20 leading-relaxed">
+                  <pre className="p-4 text-[10px] font-mono text-slate-300 overflow-x-auto max-h-[220px] bg-slate-955/20 leading-relaxed">
                     <code id="code-generate">
 {`import { NextRequest, NextResponse } from 'next/server';
 
@@ -956,29 +1022,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'API Key wajib disertakan!' }, { status: 400 });
     }
 
-    const formData = await req.formData();
-    const model = (formData.get('model') as string) || 'kling-3-omni';
+    const body = await req.json();
+    const model = body.model || 'kling-3-omni';
 
-    // Tentukan endpoint berdasarkan jenis model
-    let apiEndpoint = 'https://api.freepik.com/v1/ai/video';
+    // Tentukan endpoint resmi berdasarkan model yang dipilih
+    let apiEndpoint = '';
+    let payload: any = {};
+
     if (model === 'upscale') {
-      apiEndpoint = 'https://api.freepik.com/v1/ai/upscale';
+      apiEndpoint = 'https://api.magnific.com/v1/ai/image-upscaler';
+      payload = {
+        image: body.image_url,
+        creativity: body.creativity || 4,
+        resemblance: body.resemblance || 7,
+        scale_factor: body.scale_factor + "x",
+        prompt: body.prompt || ''
+      };
     } else if (model === 'text-to-image') {
-      apiEndpoint = 'https://api.freepik.com/v1/ai/text-to-image';
+      apiEndpoint = 'https://api.magnific.com/v1/ai/text-to-image';
+      payload = {
+        prompt: body.prompt,
+        model: 'mystic'
+      };
+    } else {
+      // Pemrosesan Model Video Reference (Kling 3 Omni standard)
+      apiEndpoint = 'https://api.magnific.com/v1/ai/reference-to-video/kling-v3-omni-std';
+      payload = {
+        image_url: body.image_url,
+        video_url: body.video_url,
+        prompt: body.prompt || '',
+        duration: 5
+      };
     }
 
-    // Teruskan payload asli
-    const payload = new FormData();
-    for (const [key, value] of formData.entries()) {
-      payload.append(key, value);
-    }
-
+    // Mengirim payload JSON bersih ke endpoint Freepik / Magnific
     const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'x-freepik-api-key': apiKey,
+        'x-magnific-api-key': apiKey
       },
-      body: payload,
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
@@ -1004,7 +1089,7 @@ export async function POST(req: NextRequest) {
                       Copy
                     </button>
                   </div>
-                  <pre className="p-4 text-[10px] font-mono text-slate-300 overflow-x-auto max-h-[220px] bg-slate-950/20 leading-relaxed">
+                  <pre className="p-4 text-[10px] font-mono text-slate-300 overflow-x-auto max-h-[220px] bg-slate-955/20 leading-relaxed">
                     <code id="code-status">
 {`import { NextRequest, NextResponse } from 'next/server';
 
@@ -1019,24 +1104,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Parameter tidak lengkap.' }, { status: 400 });
     }
 
-    // Tentukan endpoint status berdasarkan jenis model
-    let statusEndpoint = \`https://api.freepik.com/v1/ai/video/tasks/\${taskId}\`;
+    // Tentukan endpoint polling status berdasarkan jenis model
+    let statusEndpoint = \`https://api.magnific.com/v1/ai/reference-to-video/kling-v3-omni-std/\${taskId}\`;
     if (model === 'upscale') {
-      statusEndpoint = \`https://api.freepik.com/v1/ai/upscale/tasks/\${taskId}\`;
+      statusEndpoint = \`https://api.magnific.com/v1/ai/image-upscaler/\${taskId}\`;
     } else if (model === 'text-to-image') {
-      statusEndpoint = \`https://api.freepik.com/v1/ai/text-to-image/tasks/\${taskId}\`;
+      statusEndpoint = \`https://api.magnific.com/v1/ai/text-to-image/tasks/\${taskId}\`;
     }
 
     const response = await fetch(statusEndpoint, {
       method: 'GET',
       headers: {
         'x-freepik-api-key': apiKey,
+        'x-magnific-api-key': apiKey
       },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      return NextResponse.json({ error: \`Gagal sinkronisasi: \${errorText}\` }, { status: response.status });
+      return NextResponse.json({ error: \`Gagal sinkronisasi status: \${errorText}\` }, { status: response.status });
     }
 
     const data = await response.json();
