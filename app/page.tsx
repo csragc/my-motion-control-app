@@ -26,6 +26,7 @@ export default function App() {
   const [motionRef, setMotionRef] = useState<File | null>(null);
   const [motionRefName, setMotionRefName] = useState('');
 
+  // Status Monitor Rendering
   const [videoState, setVideoState] = useState<'idle' | 'loading' | 'done'>('idle');
   const [videoLoadingMsg, setVideoLoadingMsg] = useState('Mempersiapkan server...');
   const [videoTaskId, setVideoTaskId] = useState('');
@@ -134,38 +135,62 @@ export default function App() {
     }, 1200);
   };
 
-  // Handler Preview Gambar Target
+  // Handler Preview Gambar Target dengan Validasi Batas Ukuran Serverless 4.5MB
   const handleCharImgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 4.5 * 1024 * 1024) {
+        showToast("File Gambar terlalu besar! Batas Vercel Serverless adalah 4.5MB. Silakan kompres dahulu.", "error");
+        e.target.value = ''; // Reset input
+        setCharImg(null);
+        setCharImgPreview(null);
+        return;
+      }
       setCharImg(file);
       const reader = new FileReader();
       reader.onload = (event) => {
         setCharImgPreview(event.target?.result as string);
       };
       reader.readAsDataURL(file);
+      showToast("Gambar Karakter berhasil dimuat.", "success");
     }
   };
 
-  // Handler Video Referensi
+  // Handler Video Referensi dengan Validasi Batas Ukuran Serverless 4.5MB
   const handleMotionRefChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 4.5 * 1024 * 1024) {
+        showToast("File Video terlalu besar! Batas Vercel Serverless adalah 4.5MB. Silakan gunakan video pendek (1-3 dtk) atau kompres.", "error");
+        e.target.value = ''; // Reset input
+        setMotionRef(null);
+        setMotionRefName('');
+        return;
+      }
       setMotionRef(file);
       setMotionRefName(file.name);
+      showToast("Video Referensi berhasil dimuat.", "success");
     }
   };
 
-  // Handler Preview Gambar Sumber (Upscale)
+  // Handler Preview Gambar Sumber (Upscale) dengan Validasi Batas Ukuran Serverless 4.5MB
   const handleSourceImgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 4.5 * 1024 * 1024) {
+        showToast("File Gambar terlalu besar! Batas Vercel Serverless adalah 4.5MB. Silakan kompres dahulu.", "error");
+        e.target.value = ''; // Reset input
+        setSourceImg(null);
+        setSourceImgPreview(null);
+        return;
+      }
       setSourceImg(file);
       const reader = new FileReader();
       reader.onload = (event) => {
         setSourceImgPreview(event.target?.result as string);
       };
       reader.readAsDataURL(file);
+      showToast("Gambar Sumber berhasil dimuat.", "success");
     }
   };
 
@@ -398,54 +423,6 @@ export default function App() {
     } catch (err: any) {
       showToast(`Gagal Proses Gambar: ${err.message}`, "error");
       setImageState('idle');
-    }
-  };
-
-  const resetMonitor = (type: 'video' | 'image') => {
-    if (type === 'video') {
-      setVideoState('idle');
-      setOutputVideoUrl('');
-      setVideoProgress(0);
-    } else {
-      setImageState('idle');
-      setOutputImageUrl('');
-      setImageProgress(0);
-    }
-    showToast("Monitor berhasil dibersihkan.", "info");
-  };
-
-  // Memperbaiki Clipboard writeText dengan execCommand Fallback untuk lingkungan iFrame / Sandbox
-  const copyToClipboard = (textId: string) => {
-    const el = document.getElementById(textId);
-    if (el) {
-      const textToCopy = el.innerText;
-      
-      const tempTextArea = document.createElement('textarea');
-      tempTextArea.value = textToCopy;
-      tempTextArea.style.position = 'fixed';
-      tempTextArea.style.top = '0';
-      tempTextArea.style.left = '0';
-      tempTextArea.style.opacity = '0';
-      document.body.appendChild(tempTextArea);
-      
-      tempTextArea.focus();
-      tempTextArea.select();
-      
-      try {
-        const successful = document.execCommand('copy');
-        if (successful) {
-          showToast("Kode backend berhasil disalin!", "success");
-        } else {
-          showToast("Gagal menyalin kode.", "error");
-        }
-      } catch (err) {
-        showToast("Error sistem saat menyalin kode.", "error");
-        console.error("Gagal menyalin otomatis:", err);
-      }
-      
-      document.body.removeChild(tempTextArea);
-    } else {
-      showToast("Elemen kode tidak ditemukan.", "error");
     }
   };
 
@@ -865,7 +842,7 @@ export default function App() {
 
                   <button 
                     onClick={handleGenerateImage}
-                    className="w-full bg-gradient-to-r from-cyan-500 Seco to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-955 font-black text-[11px] tracking-wider uppercase py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-500/10"
+                    className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-955 font-black text-[11px] tracking-wider uppercase py-3.5 rounded-xl transition-all shadow-lg shadow-cyan-500/10"
                   >
                     {isDemoMode ? "Proses Mode Demo" : "Mulai Generate Asli"}
                   </button>
@@ -902,7 +879,7 @@ export default function App() {
 
                   {imageState === 'done' && (
                     <div className="w-full space-y-4">
-                      <div className="relative rounded-xl overflow-hidden bg-slate-955 border border-slate-900 aspect-[4/3] flex items-center justify-center">
+                      <div className="relative rounded-xl overflow-hidden bg-slate-950 border border-slate-900 aspect-[4/3] flex items-center justify-center">
                         <img src={outputImageUrl} className="w-full h-full object-contain max-h-[340px]" alt="Output Preview" />
                       </div>
                       <div className="flex gap-2">
@@ -1201,22 +1178,6 @@ export async function GET(req: NextRequest) {
 
         </div>
       </div>
-
-      {/* Global Toast Notification */}
-      {toast && (
-        <div className={`fixed bottom-6 right-6 z-[9999] p-4 rounded-xl shadow-2xl border flex items-center gap-3 transition-all duration-300 animate-bounce ${
-          toast.type === 'success' ? 'bg-emerald-950/90 text-emerald-400 border-emerald-500/30' :
-          toast.type === 'error' ? 'bg-rose-950/90 text-rose-400 border-rose-500/30' :
-          'bg-slate-900/90 text-slate-100 border-slate-800'
-        }`}>
-          <i className={`fa-solid ${
-            toast.type === 'success' ? 'fa-circle-check' :
-            toast.type === 'error' ? 'fa-circle-exclamation' :
-            'fa-circle-info'
-          }`}></i>
-          <span className="text-xs font-bold">{toast.message}</span>
-        </div>
-      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-900/60 py-6 text-center bg-slate-950/40 mt-auto text-[11px] text-slate-500">

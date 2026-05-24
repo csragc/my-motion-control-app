@@ -14,18 +14,19 @@ export async function POST(req: NextRequest) {
     let directCharUrl = '';
     let directMotionUrl = '';
 
+    // Helper untuk mengunggah file biner dengan Strategi Triple-Cloud Fallback (Pixeldrain, transfer.sh, Catbox)
+    // Tanpa melakukan arrayBuffer conversion yang tidak efisien di serverless environment
     const uploadFileWithFallback = async (file: File, fieldName: string): Promise<string> => {
-      const buffer = Buffer.from(await file.arrayBuffer());
       const cleanFileName = encodeURIComponent(file.name.replace(/[^a-zA-Z0-9.]/g, '_') || 'file');
 
       console.log(`[Upload] Memulai pengunggahan untuk ${fieldName}: ${file.name} (${file.size} bytes)`);
 
-      // 1. Opsi Utama: Pixeldrain (PUT - Raw Binary) -> Dijamin 100% Bebas CORS & Multipart Boundary Error
+      // 1. Opsi Utama: Pixeldrain (PUT - Raw Binary) -> Paling stabil, cepat, & andal untuk serverless environment
       try {
         console.log(`[Upload] Mencoba Pixeldrain PUT...`);
         const pixeldrainRes = await fetch(`https://pixeldrain.com/api/file/${cleanFileName}`, {
           method: 'PUT',
-          body: buffer
+          body: file // Mengalirkan file (Blob/File) secara utuh langsung dari serverless Next.js
         });
 
         if (pixeldrainRes.ok) {
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
         }
         console.warn(`[Upload] Pixeldrain merespons dengan status gagal: ${pixeldrainRes.status}`);
       } catch (err: any) {
-        console.warn(`[Upload] Pixeldrain gagal, beralih ke transfer.sh. Error: ${err.message}`);
+        console.warn(`[Upload] Pixeldrain gagal, mencoba transfer.sh. Error: ${err.message}`);
       }
 
       // 2. Cadangan Pertama: transfer.sh (PUT - Raw Binary)
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
         console.log(`[Upload] Mencoba transfer.sh PUT...`);
         const fallbackRes = await fetch(`https://transfer.sh/${cleanFileName}`, {
           method: 'PUT',
-          body: buffer,
+          body: file,
           headers: {
             'Content-Type': file.type || 'application/octet-stream'
           }
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (fallbackErr: any) {
-        console.warn(`[Upload] transfer.sh gagal, beralih ke catbox.moe. Error: ${fallbackErr.message}`);
+        console.warn(`[Upload] transfer.sh gagal, mencoba catbox.moe. Error: ${fallbackErr.message}`);
       }
 
       // 3. Cadangan Kedua: catbox.moe (POST - Multipart Form)
@@ -69,8 +70,7 @@ export async function POST(req: NextRequest) {
         console.log(`[Upload] Mencoba catbox.moe POST...`);
         const catboxFormData = new FormData();
         catboxFormData.append('reqtype', 'fileupload');
-        const blob = new Blob([buffer], { type: file.type });
-        catboxFormData.append('fileToUpload', blob, file.name);
+        catboxFormData.append('fileToUpload', file);
 
         const catboxRes = await fetch('https://catbox.moe/user/api.php', {
           method: 'POST',
@@ -92,11 +92,13 @@ export async function POST(req: NextRequest) {
       throw new Error(`Gagal memproses berkas ${fieldName}. Silakan coba kompres ukurannya.`);
     };
 
+    // 1. Unggah Gambar Karakter
     const imageFile = formData.get('image') as File | null;
     if (imageFile && imageFile.size > 0) {
       directCharUrl = await uploadFileWithFallback(imageFile, 'Gambar Karakter');
     }
 
+    // 2. Unggah Video Referensi
     const motionFile = formData.get('video_reference') as File | null;
     if (motionFile && motionFile.size > 0) {
       directMotionUrl = await uploadFileWithFallback(motionFile, 'Video Referensi');
