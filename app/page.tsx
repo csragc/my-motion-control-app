@@ -767,7 +767,7 @@ export default function App() {
                       rows={2} 
                       value={imagePrompt}
                       onChange={(e) => setImagePrompt(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-850 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500 transition-all text-slate-300 resize-none"
+                      className="w-full bg-slate-955 border border-slate-850 rounded-xl p-3 text-[11px] focus:outline-none focus:border-cyan-500 transition-all text-slate-300 resize-none"
                     />
                   </div>
 
@@ -895,7 +895,7 @@ export default function App() {
                         placeholder="Mulai dengan fp_..."
                         value={apiKey}
                         onChange={(e) => handleApiKeyChange(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-855 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-cyan-500 transition-all font-mono text-slate-300"
+                        className="w-full bg-slate-955 border border-slate-850 rounded-xl px-4 py-3 text-xs focus:outline-none focus:border-cyan-500 transition-all font-mono text-slate-300"
                       />
                     </div>
                     <button 
@@ -977,7 +977,9 @@ export async function POST(req: NextRequest) {
     const imageFile = formData.get('image') as File | null;
     if (imageFile && imageFile.size > 0) {
       const charFormData = new FormData();
-      charFormData.append('file', imageFile);
+      const buffer = Buffer.from(await imageFile.arrayBuffer());
+      const blob = new Blob([buffer], { type: imageFile.type });
+      charFormData.append('file', blob, imageFile.name);
 
       const charUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
         method: 'POST',
@@ -999,7 +1001,9 @@ export async function POST(req: NextRequest) {
     const motionFile = formData.get('video_reference') as File | null;
     if (motionFile && motionFile.size > 0) {
       const motionFormData = new FormData();
-      motionFormData.append('file', motionFile);
+      const buffer = Buffer.from(await motionFile.arrayBuffer());
+      const blob = new Blob([buffer], { type: motionFile.type });
+      motionFormData.append('file', blob, motionFile.name);
 
       const motionUploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
         method: 'POST',
