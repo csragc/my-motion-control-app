@@ -16,31 +16,34 @@ export async function POST(req: NextRequest) {
 
     const uploadFileWithFallback = async (file: File, fieldName: string): Promise<string> => {
       const buffer = Buffer.from(await file.arrayBuffer());
+      const cleanFileName = encodeURIComponent(file.name.replace(/[^a-zA-Z0-9.]/g, '_') || 'file');
 
-      // 1. Opsi Unggahan Utama: tmpfiles.org
+      console.log(`[Upload] Memulai pengunggahan untuk ${fieldName}: ${file.name} (${file.size} bytes)`);
+
+      // 1. Opsi Utama: Pixeldrain (PUT - Raw Binary) -> Dijamin 100% Bebas CORS & Multipart Boundary Error
       try {
-        const primaryFormData = new FormData();
-        primaryFormData.append('file', file);
-
-        const uploadRes = await fetch('https://tmpfiles.org/api/v1/upload', {
-          method: 'POST',
-          body: primaryFormData,
+        console.log(`[Upload] Mencoba Pixeldrain PUT...`);
+        const pixeldrainRes = await fetch(`https://pixeldrain.com/api/file/${cleanFileName}`, {
+          method: 'PUT',
+          body: buffer
         });
 
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json();
-          const rawUrl = uploadData.data?.url;
-          if (rawUrl) {
-            return rawUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+        if (pixeldrainRes.ok) {
+          const data = await pixeldrainRes.json();
+          if (data.success && data.id) {
+            const finalUrl = `https://pixeldrain.com/api/file/${data.id}`;
+            console.log(`[Upload] Pixeldrain Sukses! URL: ${finalUrl}`);
+            return finalUrl;
           }
         }
-      } catch (primaryErr) {
-        console.warn("tmpfiles.org gagal, mencoba transfer.sh...", primaryErr);
+        console.warn(`[Upload] Pixeldrain merespons dengan status gagal: ${pixeldrainRes.status}`);
+      } catch (err: any) {
+        console.warn(`[Upload] Pixeldrain gagal, beralih ke transfer.sh. Error: ${err.message}`);
       }
 
-      // 2. Opsi Cadangan Pertama: transfer.sh (Menggunakan raw binary PUT)
+      // 2. Cadangan Pertama: transfer.sh (PUT - Raw Binary)
       try {
-        const cleanFileName = file.name.replace(/[^a-zA-Z0-9.]/g, '_') || 'file';
+        console.log(`[Upload] Mencoba transfer.sh PUT...`);
         const fallbackRes = await fetch(`https://transfer.sh/${cleanFileName}`, {
           method: 'PUT',
           body: buffer,
@@ -52,15 +55,18 @@ export async function POST(req: NextRequest) {
         if (fallbackRes.ok) {
           const directUrl = await fallbackRes.text();
           if (directUrl && directUrl.startsWith('http')) {
-            return directUrl.trim();
+            const finalUrl = directUrl.trim();
+            console.log(`[Upload] transfer.sh Sukses! URL: ${finalUrl}`);
+            return finalUrl;
           }
         }
-      } catch (fallbackErr) {
-        console.warn("transfer.sh gagal, mencoba catbox.moe...", fallbackErr);
+      } catch (fallbackErr: any) {
+        console.warn(`[Upload] transfer.sh gagal, beralih ke catbox.moe. Error: ${fallbackErr.message}`);
       }
 
-      // 3. Opsi Cadangan Kedua: catbox.moe
+      // 3. Cadangan Kedua: catbox.moe (POST - Multipart Form)
       try {
+        console.log(`[Upload] Mencoba catbox.moe POST...`);
         const catboxFormData = new FormData();
         catboxFormData.append('reqtype', 'fileupload');
         const blob = new Blob([buffer], { type: file.type });
@@ -74,14 +80,16 @@ export async function POST(req: NextRequest) {
         if (catboxRes.ok) {
           const fileUrl = await catboxRes.text();
           if (fileUrl && fileUrl.startsWith('http')) {
-            return fileUrl.trim();
+            const finalUrl = fileUrl.trim();
+            console.log(`[Upload] catbox.moe Sukses! URL: ${finalUrl}`);
+            return finalUrl;
           }
         }
-      } catch (catboxErr) {
-        console.error("Semua cloud storage cadangan gagal:", catboxErr);
+      } catch (catboxErr: any) {
+        console.error(`[Upload] Semua provider cloud upload gagal! Error: ${catboxErr.message}`);
       }
 
-      throw new Error(`Gagal memproses ${fieldName}. Coba ganti berkas atau kompres ukurannya.`);
+      throw new Error(`Gagal memproses berkas ${fieldName}. Silakan coba kompres ukurannya.`);
     };
 
     const imageFile = formData.get('image') as File | null;
@@ -113,6 +121,7 @@ export async function POST(req: NextRequest) {
         model: 'mystic'
       };
     } else {
+      // Endpoint Video Reference resmi Magnific / Freepik
       apiEndpoint = 'https://api.magnific.com/v1/ai/reference-to-video/kling-v3-omni-std';
       payload = {
         image_url: directCharUrl,
