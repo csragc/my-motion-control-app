@@ -7,29 +7,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'API Key wajib disertakan!' }, { status: 400 });
     }
 
-    const formData = await req.formData();
-    const model = (formData.get('model') as string) || 'kling-3-omni';
+    const body = await req.json();
+    const model = body.model || 'kling-3-omni';
 
-    // Tentukan endpoint berdasarkan jenis model
-    let apiEndpoint = 'https://api.freepik.com/v1/ai/video-generator';
+    // Tentukan endpoint resmi berdasarkan model yang dipilih
+    let apiEndpoint = '';
+    let payload: any = {};
+
     if (model === 'upscale') {
-      apiEndpoint = 'https://api.freepik.com/v1/ai/image-upscaler';
+      apiEndpoint = 'https://api.magnific.com/v1/ai/image-upscaler';
+      payload = {
+        image: body.image_url,
+        creativity: body.creativity || 4,
+        resemblance: body.resemblance || 7,
+        scale_factor: body.scale_factor + "x",
+        prompt: body.prompt || ''
+      };
     } else if (model === 'text-to-image') {
-      apiEndpoint = 'https://api.freepik.com/v1/ai/text-to-image';
+      apiEndpoint = 'https://api.magnific.com/v1/ai/text-to-image';
+      payload = {
+        prompt: body.prompt,
+        model: 'mystic'
+      };
+    } else {
+      // Pemrosesan Model Video Reference (Kling 3 Omni standard)
+      apiEndpoint = 'https://api.magnific.com/v1/ai/reference-to-video/kling-v3-omni-std';
+      payload = {
+        image_url: body.image_url,
+        video_url: body.video_url,
+        prompt: body.prompt || '',
+        duration: 5
+      };
     }
 
-    // Teruskan payload asli
-    const payload = new FormData();
-    for (const [key, value] of formData.entries()) {
-      payload.append(key, value);
-    }
-
+    // Mengirim payload JSON bersih ke endpoint Freepik / Magnific
     const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'x-freepik-api-key': apiKey,
+        'x-magnific-api-key': apiKey
       },
-      body: payload,
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
